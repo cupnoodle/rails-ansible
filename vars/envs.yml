@@ -1,0 +1,10 @@
+---
+environment_vars:
+  DATABASE_HOST: localhost
+  DATABASE_NAME: "{{ postgres_db_name }}"
+  DATABASE_USERNAME: "{{ postgres_db_user }}"
+  DATABASE_PASSWORD: "{{ postgres_db_password }}"
+
+  RAILS_MASTER_KEY: abcefgh
+  SECRET_KEY_BASE: qwerty
+  STRIPE_API_KEY: blabla

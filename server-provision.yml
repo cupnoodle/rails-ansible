@@ -1,0 +1,325 @@
+---
+- hosts: web
+  become: true
+
+  vars_files:
+    - vars/vars.yml
+
+  pre_tasks:
+    - name: Update apt cache if needed.
+      apt: update_cache=yes cache_valid_time=3600
+
+  handlers:
+    - name: restart sshd
+      service:
+        name: sshd
+        state: restarted
+
+  tasks:
+    - name: Create the user for deployment purpose
+      user:
+        name: "{{ deploy_user }}"
+        password: "{{ deploy_user_password | password_hash('sha512') }}"
+        groups:
+          - sudo
+        state: present
+        shell: /bin/bash
+      become: true
+
+    - name: Set up ssh key login for the deployment user
+      authorized_key:
+        user: "{{ deploy_user }}"
+        state: present
+        key: "{{ lookup('file', deploy_user_public_key_local_path) }}"
+      become: true
+
+    - name: Disable password based login
+      lineinfile: dest=/etc/ssh/sshd_config regexp="^PasswordAuthentication" line="PasswordAuthentication no" state=present
+      notify:
+        - restart sshd
+
+    - name: Get software for apt repository management.
+      apt:
+        state: present
+        name:
+          - python3-apt
+          - python3-pycurl
+          - apt-transport-https
+          - gnupg2
+
+    - name: Add chris lea repository for redis
+      apt_repository: repo='ppa:chris-lea/redis-server' update_cache=yes
+
+    - name: Add Nodesource apt key.
+      apt_key:
+        url: https://keyserver.ubuntu.com/pks/lookup?op=get&fingerprint=on&search=0x1655A0AB68576280
+        id: "68576280"
+        state: present
+
+    - name: Install the nodejs LTS repos
+      apt_repository:
+        repo: "deb https://deb.nodesource.com/node_12.x {{ ansible_distribution_release }} main"
+        state: present
+      register: node_repo
+
+    - name: Update apt cache if repo was added.
+      apt: update_cache=yes
+      when: node_repo.changed
+
+    - name: Add Yarn GPG public key
+      apt_key:
+        url: https://dl.yarnpkg.com/debian/pubkey.gpg
+        state: present
+
+    - name: Ensure Debian sources list file exists for Yarn
+      file:
+        path: /etc/apt/sources.list.d/yarn.list
+        owner: root
+        mode: 0644
+        state: touch
+
+    - name: Ensure Debian package is in sources list for Yarn
+      lineinfile:
+        dest: /etc/apt/sources.list.d/yarn.list
+        regexp: 'deb http://dl.yarnpkg.com/debian/ stable main'
+        line: 'deb http://dl.yarnpkg.com/debian/ stable main'
+        state: present
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install dependencies for compiling Ruby along with Node.js and Yarn
+      apt:
+        state: present
+        name:
+          - git-core
+          - curl
+          - zlib1g-dev
+          - build-essential
+          - libssl-dev
+          - libreadline-dev
+          - libyaml-dev
+          - libsqlite3-dev
+          - sqlite3
+          - libxml2-dev
+          - libxslt1-dev
+          - libcurl4-openssl-dev
+          - software-properties-common
+          - libffi-dev
+          - dirmngr
+          - gnupg
+          - apt-transport-https
+          - ca-certificates
+          - redis-server
+          - redis-tools
+          - nodejs
+          - yarn
+
+- name: Log in as deploy user and setup ruby, passenger and nginx
+  hosts: web
+  vars_files:
+    - vars/vars.yml
+    - vars/envs.yml
+  user: "{{ deploy_user }}"
+  become: true
+  become_user: "{{ deploy_user }}"
+
+  handlers:
+  - name: restart nginx
+    service: name=nginx state=restarted
+
+  - name: restart postgresql
+    service:
+      name: postgresql
+      state: restart
+      sleep: 5
+
+  tasks:
+    - name: Clone Rbenv
+      git: repo=git://github.com/rbenv/rbenv.git dest=~{{ deploy_user }}/.rbenv
+
+    - name: Add Rbenv path to .bashrc
+      lineinfile:
+        dest: "/home/{{ deploy_user }}/.bashrc"
+        regexp: 'export PATH="\$HOME/.rbenv/bin:\$PATH"'
+        line: 'export PATH="$HOME/.rbenv/bin:$PATH"'
+        state: present
+
+    - name: Add Rbenv eval init to .bashrc
+      lineinfile:
+        dest: "/home/{{ deploy_user }}/.bashrc"
+        regexp: 'eval "\$\(rbenv init -\)"'
+        line: 'eval "$(rbenv init -)"'
+        state: present
+
+    - name: Clone rbenv build
+      git: repo=git://github.com/rbenv/ruby-build.git dest=~{{ deploy_user }}/.rbenv/plugins/ruby-build
+
+    - name: Add Rbenv build to .bashrc
+      lineinfile:
+        dest: "/home/{{ deploy_user }}/.bashrc"
+        regexp: 'export PATH="\$HOME/.rbenv/plugins/ruby-build/bin:\$PATH"'
+        line: 'export PATH="$HOME/.rbenv/plugins/ruby-build/bin:$PATH"'
+        state: present
+
+    - name: Clone rbenv vars
+      git: repo=git://github.com/rbenv/rbenv-vars.git dest=~{{ deploy_user }}/.rbenv/plugins/rbenv-vars
+
+    - name: source bashrc
+      shell: . /home/{{ deploy_user }}/.bashrc
+
+    - name: check ruby {{ ruby_version }} is installed for system
+      shell: "/home/{{ deploy_user }}/.rbenv/bin/rbenv versions | grep {{ruby_version}}"
+      register: ruby_installed
+      changed_when: false
+      ignore_errors: yes
+      check_mode: no
+
+    - name: rbenv install ruby
+      command: "/home/{{ deploy_user }}/.rbenv/bin/rbenv install --verbose {{ruby_version}}"
+      when:
+        - ruby_installed.rc != 0
+      async: 3600
+      poll: 10
+
+    - name: check if current system ruby version is {{ ruby_version }}
+      shell: "/home/{{ deploy_user }}/.rbenv/bin/rbenv version | cut -d ' ' -f 1 | grep -Fx '{{ ruby_version }}'"
+      register: current_ruby_selected
+      changed_when: false
+      ignore_errors: yes
+      check_mode: no
+
+    - name: rbenv set global ruby version and rehash
+      command: "/home/{{ deploy_user }}/.rbenv/bin/rbenv global {{ruby_version}} && rbenv rehash"
+      when:
+        - current_ruby_selected.rc != 0
+
+    - name: 'install bundler v1'
+      command: "/home/{{ deploy_user }}/.rbenv/shims/gem install bundler -v 1.17.3"
+
+    - name: 'install bundler v2'
+      command: "/home/{{ deploy_user }}/.rbenv/shims/gem install bundler"
+
+    - name: Add Passenger apt key.
+      apt_key:
+        keyserver: keyserver.ubuntu.com
+        id: 561F9B9CAC40B2F7
+        state: present
+      become: true
+      become_user: root
+
+    - name: Add Phusion apt repo.
+      apt_repository:
+        repo: 'deb https://oss-binaries.phusionpassenger.com/apt/passenger {{ ansible_distribution_release }} main'
+        state: present
+        update_cache: true
+      become: true
+      become_user: root
+
+    - name: Install Nginx and Passenger
+      apt:
+        name:
+          - nginx
+          - libnginx-mod-http-passenger
+        state: present
+      become: true
+      become_user: root
+
+    - name: Ensure passenger module is enabled.
+      file:
+        src: /usr/share/nginx/modules-available/mod-http-passenger.load
+        dest: /etc/nginx/modules-enabled/50-mod-http-passenger.conf
+        state: link
+
+    - name: Ask Passenger to use the Rbenv ruby
+      lineinfile:
+        dest: /etc/nginx/conf.d/mod-http-passenger.conf
+        regexp: '^passenger_ruby'
+        line: "passenger_ruby /home/{{ deploy_user }}/.rbenv/shims/ruby;"
+        state: present
+      become: true
+      become_user: root
+
+    - name: Copy app nginx conf
+      template:
+        src: templates/nginx_app.conf.j2
+        dest: /etc/nginx/sites-enabled/{{ app_name }}
+      become: true
+      become_user: root
+
+    - name: Ensure default virtual host is removed.
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      become: true
+      become_user: root
+
+    - name: Restart nginx service
+      service:
+        name: nginx
+        state: restarted
+      become: true
+      become_user: root
+
+    - name: Install postgres packages
+      apt:
+        name:
+          - libpq-dev
+          - "postgresql-{{ postgresql_version }}"
+          - postgresql-contrib
+          - python3-psycopg2
+        state: present
+      become: true
+      become_user: root
+
+    - name: Ensure all configured locales are present.
+      locale_gen: "name={{ item }} state=present"
+      with_items: "{{ postgresql_locales }}"
+      register: locale_gen_result
+
+    - name: Force-restart PostgreSQL after new locales are generated.
+      service:
+        name: postgresql
+        state: restarted
+      when: locale_gen_result.changed
+      become: true
+      become_user: root
+
+    - name: Ensure PostgreSQL is started and enabled on boot.
+      service:
+        name: postgresql
+        state: started
+        enabled: true
+      become: true
+      become_user: root
+
+    - name: Create postgresql database
+      postgresql_db: name={{ postgres_db_name }}
+      become: true
+      become_user: postgres
+      # See: https://github.com/ansible/ansible/issues/16048#issuecomment-229012509
+      vars:
+        ansible_ssh_pipelining: true
+
+    - name: Create postgresql user
+      postgresql_user: name={{ postgres_db_user }} password={{ postgres_db_password }}
+      become: true
+      become_user: postgres
+
+    - name: Ensure Redis is started on boot
+      service: name=redis-server state=started enabled=yes
+      become: true
+      become_user: root
+
+    - name: Ensure the directory of user sidekiq service exists
+      file:
+        path: "/home/{{ deploy_user }}/.config/systemd/user"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+
+    - name: Copy sidekiq service file to user service
+      template: 
+        src: templates/sidekiq.service.j2
+        dest: "/home/{{ deploy_user }}/.config/systemd/user/sidekiq.service"
