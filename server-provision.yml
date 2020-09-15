@@ -262,6 +262,15 @@
       become: true
       become_user: root
 
+    - name: Allow specified groups to sudo
+      template: 
+        src: templates/sudoers_passenger.j2
+        dest: /etc/sudoers.d/passenger
+        validate: 'visudo -cf %s'
+        mode: 0440
+      become: true
+      become_user: root
+
     - name: Install postgres packages
       apt:
         name:

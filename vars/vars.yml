@@ -1,6 +1,6 @@
 ---
 
-ruby_version: '2.7.1'
+ruby_version: '2.6.6'
 
 # Your rails app name
 app_name: 'cool'
