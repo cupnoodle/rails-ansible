@@ -262,7 +262,7 @@
       become: true
       become_user: root
 
-    - name: Allow specified groups to sudo
+    - name: Let deploy user restart passenger without sudo
       template: 
         src: templates/sudoers_passenger.j2
         dest: /etc/sudoers.d/passenger

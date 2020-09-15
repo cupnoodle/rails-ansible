@@ -1,2 +1,1 @@
-{{ deploy_user }} ALL=(ALL:ALL) NOPASSWD: /usr/bin/passenger-config restart-app
-{{ deploy_user }} ALL=(ALL:ALL) NOPASSWD: /usr/bin/env passenger-config restart-app
+{{ deploy_user }} ALL=(ALL:ALL) NOPASSWD: /usr/bin/passenger-config restart-app, /usr/bin/env passenger-config restart-app
