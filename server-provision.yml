@@ -254,6 +254,7 @@
       template:
         src: templates/nginx_app.conf.j2
         dest: /etc/nginx/sites-enabled/{{ app_name }}
+      register: nginx_conf # not necessary but without this I get intermittent issues with the task reporting it changed
       become: true
       become_user: root
 
