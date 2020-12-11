@@ -164,9 +164,6 @@
     - name: Clone rbenv vars
       git: repo=git://github.com/rbenv/rbenv-vars.git dest=~{{ deploy_user }}/.rbenv/plugins/rbenv-vars
 
-    - name: source bashrc
-      shell: . /home/{{ deploy_user }}/.bashrc
-
     - name: check ruby {{ ruby_version }} is installed for system
       shell: "/home/{{ deploy_user }}/.rbenv/bin/rbenv versions | grep {{ruby_version}}"
       register: ruby_installed
