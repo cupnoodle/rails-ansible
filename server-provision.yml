@@ -344,4 +344,6 @@
         dest: "/home/{{ deploy_user }}/.config/systemd/user/sidekiq.service"
 
     - name: enable linger for user service
-      command: "loginctl enable-linger {{ deploy_user }}"
+      command:
+        cmd: "loginctl enable-linger {{ deploy_user }}"
+        creates: "/var/lib/systemd/linger/{{ deploy_user }}"
