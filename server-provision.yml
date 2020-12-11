@@ -190,11 +190,25 @@
       when:
         - current_ruby_selected.rc != 0
 
-    - name: 'install bundler v1'
-      command: "/home/{{ deploy_user }}/.rbenv/shims/gem install bundler -v 1.17.3"
+    - name: Check if Bundler v1.17.3 is installed
+      command: "/home/{{ deploy_user }}/.rbenv/shims/gem list -i -e -v '1.17.3' bundler"
+      register: bundlerv1_installed
+      changed_when: False
+      failed_when: bundlerv1_installed.stderr | length > 0
 
-    - name: 'install bundler v2'
+    - name: "Install bundler v1.17.3 if required (currently installed: {{ bundlerv1_installed.stdout }})"
+      command: "/home/{{ deploy_user }}/.rbenv/shims/gem install bundler -v 1.17.3"
+      when: bundlerv1_installed.stdout == "false"
+
+    - name: Check if Bundler v2 is installed
+      command: "/home/{{ deploy_user }}/.rbenv/shims/gem list -i -e -v '~> 2.0' bundler"
+      register: bundlerv2_installed
+      changed_when: False
+      failed_when: bundlerv2_installed.stderr | length > 0
+
+    - name: "Install bundler v2 if required (currently installed: {{ bundlerv2_installed.stdout }})"
       command: "/home/{{ deploy_user }}/.rbenv/shims/gem install bundler"
+      when: bundlerv2_installed.stdout == "false"
 
     - name: Add Passenger apt key.
       apt_key:
