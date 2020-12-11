@@ -165,24 +165,24 @@
       git: repo=git://github.com/rbenv/rbenv-vars.git dest=~{{ deploy_user }}/.rbenv/plugins/rbenv-vars
 
     - name: check ruby {{ ruby_version }} is installed for system
-      shell: "/home/{{ deploy_user }}/.rbenv/bin/rbenv versions | grep {{ruby_version}}"
+      shell: "/home/{{ deploy_user | quote }}/.rbenv/bin/rbenv versions | grep {{ ruby_version | quote }}"
       register: ruby_installed
+      failed_when: ruby_installed.rc == 2
       changed_when: false
-      ignore_errors: yes
       check_mode: no
 
     - name: rbenv install ruby
-      command: "/home/{{ deploy_user }}/.rbenv/bin/rbenv install --verbose {{ruby_version}}"
+      command: "/home/{{ deploy_user }}/.rbenv/bin/rbenv install --verbose {{ ruby_version }}"
       when:
         - ruby_installed.rc != 0
       async: 3600
       poll: 10
 
     - name: check if current system ruby version is {{ ruby_version }}
-      shell: "/home/{{ deploy_user }}/.rbenv/bin/rbenv version | cut -d ' ' -f 1 | grep -Fx '{{ ruby_version }}'"
+      shell: "/home/{{ deploy_user | quote }}/.rbenv/bin/rbenv version | cut -d ' ' -f 1 | grep -Fx '{{ ruby_version | quote }}'"
       register: current_ruby_selected
+      failed_when: ruby_installed.rc == 2
       changed_when: false
-      ignore_errors: yes
       check_mode: no
 
     - name: rbenv set global ruby version and rehash
