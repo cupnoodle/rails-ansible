@@ -19,7 +19,7 @@
     - name: Create the user for deployment purpose
       user:
         name: "{{ deploy_user }}"
-        password: "{{ deploy_user_password | password_hash('sha512') }}"
+        password: "{{ deploy_user_password | password_hash('sha512', deploy_user_salt ) }}"
         groups:
           - sudo
         state: present
