@@ -77,6 +77,8 @@
         owner: root
         mode: 0644
         state: touch
+        modification_time: preserve
+        access_time: preserve
 
     - name: Ensure Debian package is in sources list for Yarn
       lineinfile:
