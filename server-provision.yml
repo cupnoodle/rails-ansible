@@ -5,10 +5,6 @@
   vars_files:
     - vars/vars.yml
 
-  pre_tasks:
-    - name: Update apt cache if needed.
-      apt: update_cache=yes cache_valid_time=3600
-
   handlers:
     - name: restart sshd
       service:
@@ -38,7 +34,7 @@
       notify:
         - restart sshd
 
-    - name: Get software for apt repository management.
+    - name: Get base software for apt repository management.
       apt:
         state: present
         name:
@@ -46,6 +42,7 @@
           - python3-pycurl
           - apt-transport-https
           - gnupg2
+        update_cache: yes
 
     - name: Add chris lea repository for redis
       apt_repository: repo='ppa:chris-lea/redis-server' update_cache=yes
@@ -87,10 +84,6 @@
         line: 'deb http://dl.yarnpkg.com/debian/ stable main'
         state: present
 
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-
     - name: Install dependencies for compiling Ruby along with Node.js and Yarn
       apt:
         state: present
@@ -117,6 +110,9 @@
           - redis-tools
           - nodejs
           - yarn
+        update_cache: yes
+      register: apt_output
+      changed_when: "not '0 upgraded, 0 newly installed, 0 to remove' in apt_output.stdout"
 
 - name: Log in as deploy user and setup ruby, passenger and nginx
   hosts: web
