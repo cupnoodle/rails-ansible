@@ -240,6 +240,8 @@
         src: /usr/share/nginx/modules-available/mod-http-passenger.load
         dest: /etc/nginx/modules-enabled/50-mod-http-passenger.conf
         state: link
+      notify:
+        - restart nginx
 
     - name: Ask Passenger to use the Rbenv ruby
       lineinfile:
@@ -257,6 +259,8 @@
       register: nginx_conf # not necessary but without this I get intermittent issues with the task reporting it changed
       become: true
       become_user: root
+      notify:
+        - restart nginx
 
     - name: Ensure default virtual host is removed.
       file:
@@ -264,13 +268,8 @@
         state: absent
       become: true
       become_user: root
-
-    - name: Restart nginx service
-      service:
-        name: nginx
-        state: restarted
-      become: true
-      become_user: root
+      notify:
+        - restart nginx
 
     - name: Let deploy user restart passenger without sudo
       template: 
