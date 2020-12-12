@@ -7,6 +7,7 @@ app_name: 'cool'
 
 deploy_user: 'deploy'
 deploy_user_password: 'correcthorsebatterystapler'
+deploy_user_salt: '78d8b6ff622c9fa4'
 
 # The path to your local public key file (ie. your current computer)
 deploy_user_public_key_local_path: '~/.ssh/id_rsa.pub'

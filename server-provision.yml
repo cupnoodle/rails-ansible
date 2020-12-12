@@ -5,10 +5,6 @@
   vars_files:
     - vars/vars.yml
 
-  pre_tasks:
-    - name: Update apt cache if needed.
-      apt: update_cache=yes cache_valid_time=3600
-
   handlers:
     - name: restart sshd
       service:
@@ -19,7 +15,7 @@
     - name: Create the user for deployment purpose
       user:
         name: "{{ deploy_user }}"
-        password: "{{ deploy_user_password | password_hash('sha512') }}"
+        password: "{{ deploy_user_password | password_hash('sha512', deploy_user_salt ) }}"
         groups:
           - sudo
         state: present
@@ -38,7 +34,7 @@
       notify:
         - restart sshd
 
-    - name: Get software for apt repository management.
+    - name: Get base software for apt repository management.
       apt:
         state: present
         name:
@@ -46,6 +42,7 @@
           - python3-pycurl
           - apt-transport-https
           - gnupg2
+        update_cache: yes
 
     - name: Add chris lea repository for redis
       apt_repository: repo='ppa:chris-lea/redis-server' update_cache=yes
@@ -77,6 +74,8 @@
         owner: root
         mode: 0644
         state: touch
+        modification_time: preserve
+        access_time: preserve
 
     - name: Ensure Debian package is in sources list for Yarn
       lineinfile:
@@ -84,10 +83,6 @@
         regexp: 'deb http://dl.yarnpkg.com/debian/ stable main'
         line: 'deb http://dl.yarnpkg.com/debian/ stable main'
         state: present
-
-    - name: Update apt cache
-      apt:
-        update_cache: yes
 
     - name: Install dependencies for compiling Ruby along with Node.js and Yarn
       apt:
@@ -115,6 +110,9 @@
           - redis-tools
           - nodejs
           - yarn
+        update_cache: yes
+      register: apt_output
+      changed_when: "not '0 upgraded, 0 newly installed, 0 to remove' in apt_output.stdout"
 
 - name: Log in as deploy user and setup ruby, passenger and nginx
   hosts: web
@@ -127,7 +125,9 @@
 
   handlers:
   - name: restart nginx
-    service: name=nginx state=restarted
+    service:
+      name: nginx
+      state: reloaded
 
   - name: restart postgresql
     service:
@@ -166,28 +166,25 @@
     - name: Clone rbenv vars
       git: repo=git://github.com/rbenv/rbenv-vars.git dest=~{{ deploy_user }}/.rbenv/plugins/rbenv-vars
 
-    - name: source bashrc
-      shell: . /home/{{ deploy_user }}/.bashrc
-
     - name: check ruby {{ ruby_version }} is installed for system
-      shell: "/home/{{ deploy_user }}/.rbenv/bin/rbenv versions | grep {{ruby_version}}"
+      shell: "/home/{{ deploy_user | quote }}/.rbenv/bin/rbenv versions | grep {{ ruby_version | quote }}"
       register: ruby_installed
+      failed_when: ruby_installed.rc == 2
       changed_when: false
-      ignore_errors: yes
       check_mode: no
 
     - name: rbenv install ruby
-      command: "/home/{{ deploy_user }}/.rbenv/bin/rbenv install --verbose {{ruby_version}}"
+      command: "/home/{{ deploy_user }}/.rbenv/bin/rbenv install --verbose {{ ruby_version }}"
       when:
         - ruby_installed.rc != 0
       async: 3600
       poll: 10
 
     - name: check if current system ruby version is {{ ruby_version }}
-      shell: "/home/{{ deploy_user }}/.rbenv/bin/rbenv version | cut -d ' ' -f 1 | grep -Fx '{{ ruby_version }}'"
+      shell: "/home/{{ deploy_user | quote }}/.rbenv/bin/rbenv version | cut -d ' ' -f 1 | grep -Fx '{{ ruby_version | quote }}'"
       register: current_ruby_selected
+      failed_when: ruby_installed.rc == 2
       changed_when: false
-      ignore_errors: yes
       check_mode: no
 
     - name: rbenv set global ruby version and rehash
@@ -195,11 +192,25 @@
       when:
         - current_ruby_selected.rc != 0
 
-    - name: 'install bundler v1'
-      command: "/home/{{ deploy_user }}/.rbenv/shims/gem install bundler -v 1.17.3"
+    - name: Check if Bundler v1.17.3 is installed
+      command: "/home/{{ deploy_user }}/.rbenv/shims/gem list -i -e -v '1.17.3' bundler"
+      register: bundlerv1_installed
+      changed_when: False
+      failed_when: bundlerv1_installed.stderr | length > 0
 
-    - name: 'install bundler v2'
+    - name: "Install bundler v1.17.3 if required (currently installed: {{ bundlerv1_installed.stdout }})"
+      command: "/home/{{ deploy_user }}/.rbenv/shims/gem install bundler -v 1.17.3"
+      when: bundlerv1_installed.stdout == "false"
+
+    - name: Check if Bundler v2 is installed
+      command: "/home/{{ deploy_user }}/.rbenv/shims/gem list -i -e -v '~> 2.0' bundler"
+      register: bundlerv2_installed
+      changed_when: False
+      failed_when: bundlerv2_installed.stderr | length > 0
+
+    - name: "Install bundler v2 if required (currently installed: {{ bundlerv2_installed.stdout }})"
       command: "/home/{{ deploy_user }}/.rbenv/shims/gem install bundler"
+      when: bundlerv2_installed.stdout == "false"
 
     - name: Add Passenger apt key.
       apt_key:
@@ -231,6 +242,8 @@
         src: /usr/share/nginx/modules-available/mod-http-passenger.load
         dest: /etc/nginx/modules-enabled/50-mod-http-passenger.conf
         state: link
+      notify:
+        - restart nginx
 
     - name: Ask Passenger to use the Rbenv ruby
       lineinfile:
@@ -245,8 +258,11 @@
       template:
         src: templates/nginx_app.conf.j2
         dest: /etc/nginx/sites-enabled/{{ app_name }}
+      register: nginx_conf # not necessary but without this I get intermittent issues with the task reporting it changed
       become: true
       become_user: root
+      notify:
+        - restart nginx
 
     - name: Ensure default virtual host is removed.
       file:
@@ -254,13 +270,8 @@
         state: absent
       become: true
       become_user: root
-
-    - name: Restart nginx service
-      service:
-        name: nginx
-        state: restarted
-      become: true
-      become_user: root
+      notify:
+        - restart nginx
 
     - name: Let deploy user restart passenger without sudo
       template: 
@@ -334,4 +345,6 @@
         dest: "/home/{{ deploy_user }}/.config/systemd/user/sidekiq.service"
 
     - name: enable linger for user service
-      command: "loginctl enable-linger {{ deploy_user }}"
+      command:
+        cmd: "loginctl enable-linger {{ deploy_user }}"
+        creates: "/var/lib/systemd/linger/{{ deploy_user }}"
