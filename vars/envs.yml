@@ -1,7 +1,6 @@
 ---
 environment_vars:
-  TEST_NAME: ayyylmao
-  DATABASE_HOST: localhost
+  DATABASE_HOST: 127.0.0.1
   DATABASE_NAME: "{{ postgres_db_name }}"
   DATABASE_USERNAME: "{{ postgres_db_user }}"
   DATABASE_PASSWORD: "{{ postgres_db_password }}"

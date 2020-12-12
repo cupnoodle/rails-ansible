@@ -1,6 +1,6 @@
 ---
 
-ruby_version: '2.6.6'
+ruby_version: '2.7.2'
 
 # Your rails app name
 app_name: 'cool'
@@ -12,7 +12,7 @@ deploy_user_password: 'correcthorsebatterystapler'
 deploy_user_public_key_local_path: '~/.ssh/id_rsa.pub'
 
 # credentials of postgres user which your rails app will use to connect to the database
-postgres_db_user: 'deploy'
+postgres_db_user: 'cool'
 postgres_db_password: 'correcthorsebatterystapler'
 postgres_db_name: 'cool_production'
 
