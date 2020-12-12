@@ -4,7 +4,7 @@ server {
   listen 80;
   listen [::]:80;
 
-  server_name _;
+  server_name {{ certbot_domains | join(' ') }};
   root /home/{{ deploy_user }}/{{ app_name }}/current/public;
 
   passenger_enabled on;
