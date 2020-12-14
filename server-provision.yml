@@ -266,6 +266,7 @@
       changed_when: "'Running post-hook command' in certbot_output.stdout"
       become: true
       become_user: root
+      when: use_lets_encrypt
 
     - name: Set Letsencrypt Cronjob for Certificate Auto Renewal
       cron:
@@ -273,6 +274,7 @@
         special_time: monthly
         job: "/usr/bin/certbot renew"
       when: ansible_facts['os_family'] == "Debian"
+      when: use_lets_encrypt
 
     - name: Restart nginx service
       service:

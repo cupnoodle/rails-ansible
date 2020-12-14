@@ -6,6 +6,7 @@ ruby_version: '2.6.6'
 app_name: 'cool'
 
 # TLS settings for Let's Encrypt
+use_lets_encrypt: false
 certbot_domains:
   - www.example.com
   - example.com
