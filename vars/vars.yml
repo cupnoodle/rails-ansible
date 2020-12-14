@@ -5,6 +5,13 @@ ruby_version: '2.6.6'
 # Your rails app name
 app_name: 'cool'
 
+# TLS settings for Let's Encrypt
+use_lets_encrypt: false
+certbot_domains:
+  - www.example.com
+  - example.com
+certbot_email: my_email@example.com
+
 deploy_user: 'deploy'
 deploy_user_password: 'correcthorsebatterystapler'
 

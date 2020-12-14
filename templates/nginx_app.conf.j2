@@ -4,7 +4,11 @@ server {
   listen 80;
   listen [::]:80;
 
+  {% if use_lets_encrypt -%}
+  server_name {{ certbot_domains | join(' ') }};
+  {% else -%}
   server_name _;
+  {% endif %}
   root /home/{{ deploy_user }}/{{ app_name }}/current/public;
 
   passenger_enabled on;

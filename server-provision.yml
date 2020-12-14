@@ -89,7 +89,7 @@
       apt:
         update_cache: yes
 
-    - name: Install dependencies for compiling Ruby along with Node.js and Yarn
+    - name: Install dependencies for compiling Ruby, Node.js, Yarn and Certbot
       apt:
         state: present
         name:
@@ -115,8 +115,9 @@
           - redis-tools
           - nodejs
           - yarn
+          - python3-certbot-nginx
 
-- name: Log in as deploy user and setup ruby, passenger and nginx
+- name: Log in as deploy user and setup ruby, passenger, nginx and certbot
   hosts: web
   vars_files:
     - vars/vars.yml
@@ -255,6 +256,26 @@
       become: true
       become_user: root
 
+    - name: Create and Install Cert Using Nginx Plugin
+      command: >-
+         certbot --nginx {% for host in certbot_domains %}  -d {{ host }} {% endfor %}
+         -m {{ certbot_email }}
+         --agree-tos --noninteractive --redirect
+         --post-hook "/bin/true"
+      register: certbot_output
+      changed_when: "'Running post-hook command' in certbot_output.stdout"
+      become: true
+      become_user: root
+      when: use_lets_encrypt
+
+    - name: Set Letsencrypt Cronjob for Certificate Auto Renewal
+      cron:
+        name: letsencrypt_renewal
+        special_time: monthly
+        job: "/usr/bin/certbot renew"
+      when: ansible_facts['os_family'] == "Debian"
+      when: use_lets_encrypt
+
     - name: Restart nginx service
       service:
         name: nginx
@@ -263,7 +284,7 @@
       become_user: root
 
     - name: Let deploy user restart passenger without sudo
-      template: 
+      template:
         src: templates/sudoers_passenger.j2
         dest: /etc/sudoers.d/passenger
         validate: 'visudo -cf %s'
@@ -329,7 +350,7 @@
         group: "{{ deploy_user }}"
 
     - name: Copy sidekiq service file to user service
-      template: 
+      template:
         src: templates/sidekiq.service.j2
         dest: "/home/{{ deploy_user }}/.config/systemd/user/sidekiq.service"
 
