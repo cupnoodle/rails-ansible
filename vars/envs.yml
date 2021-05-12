@@ -1,10 +1,10 @@
 ---
 environment_vars:
-  TEST_NAME: ayyylmao
+  TEST_NAME: some_value
   DATABASE_HOST: localhost
   DATABASE_NAME: "{{ postgres_db_name }}"
   DATABASE_USERNAME: "{{ postgres_db_user }}"
   DATABASE_PASSWORD: "{{ postgres_db_password }}"
 
-  RAILS_MASTER_KEY: f9c352ac32cd1b5930df682495efae09
-  SECRET_KEY_BASE: e042f40ce6f08c47d74aae126ab3f341ab76712ca9e22db057249817f9aa930e0503acc8f5507a82e79af70cd7836ffbe696a385b0367b0252e6901db0d4e066
+  RAILS_MASTER_KEY: your_rails_app_master_key
+  SECRET_KEY_BASE: your_rails_app_secret_key_base

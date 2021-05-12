@@ -3,18 +3,18 @@
 ruby_version: '2.6.6'
 
 # Your rails app name
-app_name: 'cool'
+app_name: 'your_app_name'
 
-deploy_user: 'deploy'
-deploy_user_password: 'correcthorsebatterystapler'
+deploy_user: 'your_deploy_user'
+deploy_user_password: 'your_deploy_user_password'
 
 # The path to your local public key file (ie. your current computer)
 deploy_user_public_key_local_path: '~/.ssh/id_rsa.pub'
 
 # credentials of postgres user which your rails app will use to connect to the database
-postgres_db_user: 'deploy'
-postgres_db_password: 'correcthorsebatterystapler'
-postgres_db_name: 'cool_production'
+postgres_db_user: 'your_db_user'
+postgres_db_password: 'your_db_password'
+postgres_db_name: 'your_db_name'
 
 # you can leave these untouched
 postgresql_version: '12'
